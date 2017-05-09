@@ -108,14 +108,14 @@ Body (binary data)
 
 If database is missing (entry is `null`), then "\_system" is assumed.
 
-Type:
+`type`:
 
     1 = Request
     2 = Response (final response for this message id)
     3 = Response (but at least one more response will follow)
     1000 = Authentication
 
-requestType:
+`requestType`:
 
     0 = DELETE
     1 = GET
@@ -143,12 +143,12 @@ is equivalent to
       "test",          // database
       1,               // requestType GET
       "/_admin/echo",  // request path
-      {     // parameters
+      {                // parameters
         a: 1,
         b: 2,
         c: [ 1, 3 ]
       },
-      {     // meta
+      {                // meta
         x-arangodb-async: true
       }
     ]
@@ -171,7 +171,7 @@ The response will be
     Body (binary data)
 
 Request can be pipelined or mixed. The responses are mapped using the
-"messageId" in the header. It is responsibility of the **sender** to
+"messageId" in the header. It is the responsibility of the **sender** to
 generate suitable "messageId" values.
 
 The default content-type is `"application/vpack"`.
