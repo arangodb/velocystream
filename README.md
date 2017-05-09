@@ -36,7 +36,7 @@ of binary data). How many VelocyPacks are part of a message is
 completely application dependent, see below for ArangoDB.
 
 It is possible that the messages are very large. As messages can be
-multiplexed over one connection, large message need to be split into
+multiplexed over one connection, large messages need to be split into
 chunks. The sender/receiver class will accept a vector of VelocyPacks,
 split them into chunks, send these chunks over the wire, assemble these
 chunks, generates a vector of VelocyPacks and passes this to the
@@ -53,7 +53,7 @@ on whether it is the first in a message or a subsequent one:
 | name            | type                      | description |
 | --------------- | ------------------------- | --- |
 | length          | uint32\_t                 | total length in bytes of the current chunk, including this header |
-| chunkX          | uint32\_t                 | chunk/isFirstChunk (upper 31bits/lowest bit) |
+| chunkX          | uint32\_t                 | chunk/isFirstChunk (upper 31bits/lowest bit), details see below |
 | messageId       | uint64\_t                 | a unique identifier, it is the responsibility of the sender to generate such an identifier (zero is reserved for not set ID) |
 | messageLength   | uint64\_t                 | the total size of the message. |
 | Binary data     | binary data blob          | size b1 |
@@ -83,16 +83,23 @@ good idea to restrict the maximal size to a few megabytes.
 
 **Notes:**
 
-When sending a (small) message, it is important to ensure that only one TCP
+When sending a (small) message, it is important (for performance reasons)
+to ensure that only one TCP
 packet is sent. For example, by using sendmmsg under Linux
 ([*https://blog.cloudflare.com/how-to-receive-a-million-packets/*](https://blog.cloudflare.com/how-to-receive-a-million-packets/))
+
+Implementors should nevertheless be aware that in TCP/IP one cannot
+enforce this and so implementations must always be aware that some part
+of the network stack can split packets and the payload might arrive in
+multiple parts!
 
 ArangoDB
 ========
 
 ### Request / Response
 
-For an ArangoDB client, the request is:
+For an ArangoDB client, the request is of the following format, the
+array is a VelocyPack array:
 
     [
     /* 0 - version: */     1,                    // [int]
@@ -104,7 +111,7 @@ For an ArangoDB client, the request is:
     /* 6 - meta: */        { x-arangodb: true }  // [[string]->[string]]
     ]
 
-Body (binary data)
+    Body (binary data)
 
 If database is missing (entry is `null`), then "\_system" is assumed.
 
@@ -156,7 +163,7 @@ is equivalent to
 The request is a message beginning with one VelocyPack. This VelocyPack
 always contains the header fields, parameters and request path. If the
 meta field does not contain a content type, then the default
-"application/vpack" is assumed and the body will be one or multiple
+`"application/vpack"` is assumed and the body will be one or multiple
 VelocyPack object.
 
 The response will be
@@ -210,6 +217,10 @@ if successful or
     }
 
 if not successful, and in this case the connection is closed by the server.
+One can acquire a JWT token in the same way as with HTTP using the 
+open, unauthenticated route `/_open/auth` with the same semantics as
+in the HTTP version. In this way, the complete authentication can be
+done in a single session via JWT.
 
 
 ### Content-Type and Accept
