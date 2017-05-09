@@ -50,8 +50,9 @@ ALWAYS little endian. The format of a chunk is the following, regardless
 on whether it is the first in a message or a subsequent one:
 
 
-| length          | uint32\_t                 | total length in bytes of the current chunk, including this header |
+| name            | type                      | description |
 | --------------- | ------------------------- | --- |
+| length          | uint32\_t                 | total length in bytes of the current chunk, including this header |
 | chunk           | uint32\_t (upper 31bits)  | = 1 |
 | isFirstChunk    | (lowest bit)              | = 1 |
 | messageId       | uint64\_t                 | a unique identifier, it is the responsibility of the sender to generate such an identifier (zero is reserved for not set ID) |
