@@ -60,7 +60,7 @@ on whether it is the first in a message or a subsequent one:
 Clarification: "chunk" and "isFirstChunk" are combined into an unsigned
 32bit value. Therefore it will be encoded as
 
-    uint32\_t chunkX
+    uint32_t chunkX
 
 and extracted as
 
@@ -83,7 +83,7 @@ The total message size is "length" - 24.
 
 **Notes:**
 
-When sending a (small) message, it is import to ensure that only one TCP
+When sending a (small) message, it is important to ensure that only one TCP
 packet is sent. For example, by using sendmmsg under Linux
 ([*https://blog.cloudflare.com/how-to-receive-a-million-packets/*](https://blog.cloudflare.com/how-to-receive-a-million-packets/))
 
@@ -106,7 +106,7 @@ For an ArangoDB client, the request is:
 
 Body (binary data)
 
-If database is missing (entry is "null"), then "\_system" is assumed.
+If database is missing (entry is `null`), then "\_system" is assumed.
 
 Type:
 
