@@ -79,9 +79,7 @@ number of this chunk.
 The total size of the data package is (24 + b1) bytes. This number is
 stored in the length field. If one needs to send messages larger than
 UINT32\_MAX, then these messages must be chunked. In general it is a
-good idea to restrict the maximal size to a few megabyte.
-
-The total message size is "length" - 24.
+good idea to restrict the maximal size to a few megabytes.
 
 **Notes:**
 
