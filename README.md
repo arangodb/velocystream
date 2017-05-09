@@ -53,8 +53,7 @@ on whether it is the first in a message or a subsequent one:
 | name            | type                      | description |
 | --------------- | ------------------------- | --- |
 | length          | uint32\_t                 | total length in bytes of the current chunk, including this header |
-| chunk           | uint32\_t (upper 31bits)  | = 1 |
-| isFirstChunk    | (lowest bit)              | = 1 |
+| chunkX          | uint32\_t                 | chunk/isFirstChunk (upper 31bits/lowest bit) |
 | messageId       | uint64\_t                 | a unique identifier, it is the responsibility of the sender to generate such an identifier (zero is reserved for not set ID) |
 | messageLength   | uint64\_t                 | the total size of the message. |
 | Binary data     | binary data blob          | size b1 |
