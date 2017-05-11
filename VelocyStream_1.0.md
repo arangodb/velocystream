@@ -1,7 +1,14 @@
-Client / Server Communication (VST 1.1)
+Client / Server Communication (VST 1.0)
 =======================================
 
-Version 1.1.0 of 23 November 2016
+Version 1.0.0 of 11 November 2016, 10:13 CET
+
+Comment: This document was created after the fact and describes the
+implementation that is in use in all versions of ArangoDB 3.1 and all
+development versions of ArangoDB 3.2 up to 10 May 2017. Later versions
+support both this protocol version 1.0 and the protocol version 1.1.
+The version used is detected from the first 11 bytes sent by the client,
+for details see below.
 
 HTTP
 ----
@@ -31,9 +38,10 @@ implement that behavior.
 ### Message vs. Chunk
 
 The consumer (client or server) will deal with messages. A message
-consists of one or more VelocyPacks (or in some cases of certain parts
-of binary data). How many VelocyPacks are part of a message is
-completely application dependent, see below for ArangoDB.
+consists of one or more VelocyPacks. So typically with the drive a
+message will be defined as vector of VelocyPacks. How many VelocyPacks
+are part of a message is completely application dependent, see below for
+ArangoDB.
 
 It is possible that the messages are very large. As messages can be
 multiplexed over one connection, large messages need to be split into
@@ -45,56 +53,75 @@ consumer.
 ### Chunks
 
 In order to allow reassemble chunks, each package is prefixed by a small
-header. A chunk is always at least 24 bytes long. The byte order is
-ALWAYS little endian. The format of a chunk is the following, regardless
-on whether it is the first in a message or a subsequent one:
+header. A chunk is always at least 20 bytes long. The byte order is
+ALWAYS little endian.
 
+#### Case 1: just one chunk
 
-| name            | type                      | description |
-| --------------- | ------------------------- | --- |
-| length          | uint32\_t                 | total length in bytes of the current chunk, including this header |
-| chunkX          | uint32\_t                 | chunk/isFirstChunk (upper 31bits/lowest bit), details see below |
-| messageId       | uint64\_t                 | a unique identifier, it is the responsibility of the sender to generate such an identifier (zero is reserved for not set ID) |
-| messageLength   | uint64\_t                 | the total size of the message. |
-| Binary data     | binary data blob          | size b1 |
+    ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    length         uint32\_t                  total length in bytes of the current chunk, including this header
+    -------------- -------------------------- ------------------------------------------------------------------------------------------------------------------------------
+    chunk          uint32\_t (lower 31bits)   = 1
+    isFirstChunk   (highest bit)              = 1
+    messageId      uint64\_t                  a unique identifier, it is the responsibility of the sender to generate such an identifier (zero is reserved for not set ID)
+    Binary data    binary data blob           size b1
+    ------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 
-
-Clarification: "chunk" and "isFirstChunk" are combined into an unsigned
-32bit value. Therefore it will be encoded as
+Clarification: “chunk” and “isFirstChunk” are combined into a 32bit
+value. Therefore it will be encoded as
 
     uint32_t chunkX
 
 and extracted as
 
     chunk = chunkX >> 1
-
     isFirstChunk = chunkX & 0x1
 
-For the first chunk of a message, the low bit of the second uint32\_t is
-set, for all subsequent ones it is reset. In the first chunk of a
-message, the number "chunk" is the total number of chunks in the
-message, in all subsequent chunks, the number "chunk" is the current
-number of this chunk.
-
-The total size of the data package is (24 + b1) bytes. This number is
-stored in the length field. If one needs to send messages larger than
+The total size of the data package is (16 + b1) bytes. This number is
+stored in the length field. If one needs to messages larger than
 UINT32\_MAX, then these messages must be chunked. In general it is a
-good idea to restrict the maximal size to a few megabytes.
+good idea to restrict the maximal size to a few megabyte.
 
-**Notes:**
+The total message size is “length” - 16.
 
-When sending a (small) message, it is important (for performance reasons)
-to ensure that only one TCP
+#### Case 2: more than one chunk
+
+In order to optimize memory allocation, the first chunk contains the
+number of chunks and the total message size.
+
+##### First chunk
+
+    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+    length                uint32\_t                  total length in bytes of the current chunk, including this header
+    --------------------- -------------------------- ------------------------------------------------------------------------------------------------------------------------------
+    chunk                 uint32\_t (lower 31bits)   the total number of chunks, this number is **greater than** 1. Therefore it is possible to distinguish between case 1 and 2.
+    isFirstChunk          (highest bit)              = 1
+    messageId             uint64\_t                  a unique identifier, it is the responsibility of the sender to generate such an identifier
+    messageLength         uint64\_t                  the total size of the message. The message length is only present, if isFirstChunk = 1 and chunk &gt; 1
+    partial binary data   binary data blob           
+    -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+
+##### Additional chunks
+
+The following chunks do **not** contain the message length
+
+    ---------------------------------------------------------------------------------------------------------------------------------------------
+    length                uint32\_t                  total length in bytes of the current chunk, including this header
+    --------------------- -------------------------- --------------------------------------------------------------------------------------------
+    chunk                 uint32\_t (lower 31bits)   an increasing number without gaps. The second chunks contains a 1, the third a 2 and so on
+    isFirstChunk          (highest bit)              = 0
+    messageId             uint64\_t                  a unique identifier, it is the responsibility of the sender to generate such an identifier
+    partial binary data   binary data blob           
+    ---------------------------------------------------------------------------------------------------------------------------------------------
+
+#### Notes
+
+When sending a (small) message, it is import to ensure that only one TCP
 packet is sent. For example, by using sendmmsg under Linux
-([*https://blog.cloudflare.com/how-to-receive-a-million-packets/*](https://blog.cloudflare.com/how-to-receive-a-million-packets/))
-
-Implementors should nevertheless be aware that in TCP/IP one cannot
-enforce this and so implementations must always be aware that some part
-of the network stack can split packets and the payload might arrive in
-multiple parts!
+(https://blog.cloudflare.com/how-to-receive-a-million-packets/)
 
 ArangoDB
-========
+--------
 
 ### Request / Response
 
@@ -206,22 +233,7 @@ or
 
 The response is
 
-    { "error": false }
-
-if successful or
-
-    { 
-      "error": true,
-      "errorMessage": "MESSAGE",
-      "errorCode": CODE
-    }
-
-if not successful, and in this case the connection is closed by the server.
-One can acquire a JWT token in the same way as with HTTP using the 
-open, unauthenticated route `/_open/auth` with the same semantics as
-in the HTTP version. In this way, the complete authentication can be
-done in a single session via JWT.
-
+...
 
 ### Content-Type and Accept
 
@@ -278,9 +290,16 @@ The first bytes sent after a connection (the "client" side - even if the
 program is bi-directional, there is a server listening to a port and a
 client connecting to a port) are
 
-    VST/1.1\r\n\r\n
+    VST/1.0\r\n\r\n
 
 (11 Bytes)
 
+TODO
+----
+
+-   encryption type for auth is not used in implementation (check - spec
+    > and implementation MUST match)
+
+-   compression: lz4? everything or large (strings | objects) only?
 
 
